@@ -1,34 +1,67 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { validate } from 'class-validator';
 
 @Injectable()
 export class UsersService {
-  private users: User[] = []; 
+  constructor(
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
+  ) {}
 
-  findAll(): User[] {
-    return this.users;
+  async findAll(): Promise<User[]> {
+    return this.userRepository.find();
   }
 
-  findOne(id: number): User | undefined {
-    return this.users.find(user => user.id === id);
-  }
-
-  create(user: User): User {
-    this.users.push(user);
+  async findOne(id: number): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
     return user;
   }
 
-  update(id: number, updatedUser: User): User | undefined {
-    const userIndex = this.users.findIndex(user => user.id === id);
-    if (userIndex === -1) return undefined;
-    this.users[userIndex] = updatedUser;
-    return this.users[userIndex];
+  async create(user: User): Promise<User> {
+    return this.userRepository.save(user);
   }
 
-  delete(id: number): boolean { 
-    const userIndex = this.users.findIndex(user => user.id === id);
-    if (userIndex === -1) return false;
-    this.users.splice(userIndex, 1);
-    return true;
+  async update(id: number, updatedUser: Partial<User>): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    Object.assign(user, updatedUser);
+    return this.userRepository.save(user);
+  }
+
+  async delete(id: number): Promise<void> {
+    const result = await this.userRepository.delete(id);
+    if (result.affected === 0) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+  }
+
+  async createBulkUsers(data: any[]): Promise<User[]> {
+    const users: User[] = [];
+
+    for (const item of data) {
+      const user = new User();
+      user.username = item.username;
+      user.age = item.age;
+      user.hobbies = item.hobbies;
+
+      const errors = await validate(user);
+      if (errors.length > 0) {
+        throw new BadRequestException(`Validation failed: ${errors}`);
+      }
+
+      const savedUser = await this.userRepository.save(user);
+      users.push(savedUser);
+    }
+
+    return users;
   }
 }
+
