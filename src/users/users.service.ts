@@ -50,7 +50,9 @@ export class UsersService {
       const user = new User();
       user.username = item.username;
       user.age = item.age;
-      user.hobbies = item.hobbies;
+      user.hobbies =
+      typeof item.hobbies === 'string' ? item.hobbies.split(',').map(hobby => hobby.trim()) : [];
+
 
       const errors = await validate(user);
       if (errors.length > 0) {
